@@ -32,8 +32,9 @@ def getVendorDetails(event):
 
     return response['records'][0][0]['stringValue']
 
-def build_rds_parameters(data: dict, alias_map: dict = None):
+def build_rds_parameters(vendor_id, data: dict, alias_map: dict = None):
     parameters = []
+    data['vendor_id'] = vendor_id
 
     for key, value in data.items():
         aliases = alias_map[key] if alias_map and key in alias_map else [key]
@@ -86,7 +87,7 @@ def add_db_record(vendor_id, product_data):
     }
 
     for product in product_data['products']:
-        product_params = build_rds_parameters(product, product_alias_map)
+        product_params = build_rds_parameters(vendor_id, product, product_alias_map)
         rds.execute_statement(
             resourceArn=cluster_arn,
             secretArn=secret_arn,
@@ -94,8 +95,6 @@ def add_db_record(vendor_id, product_data):
             sql=sql,
             parameters=product_params
     )
-
-
 
 
 def connect_to_db():
@@ -115,14 +114,14 @@ def connect_to_db():
 
 def lambda_handler(event, context):
 
-    
-    response = add_db_record(event["vendor_data"])
+    vendor_id = getVendorDetails(event)
+
     #response = connect_to_db()
     # print("Database response:", response)
     # for record in response['records']:
     #     print("Record:", record[1]["stringValue"])
-
+    add_db_record(vendor_id, event["product_data"])
     return {
         'statusCode': 200,
-        'body': json.dumps('MySQL connection successful')
+        'body': json.dumps('Products added successfully')
     }
