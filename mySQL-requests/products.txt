@@ -1,0 +1,31 @@
+CurrentTable:
+-id
+-vendor_id
+-name
+-sku
+-price
+-stock_quantity
+-is_active
+-created_at
+-updated_at
+
+
+--- Search Entire Table---
+SELECT * From `mmp-db`.products();
+
+--- Add New Product ---
+INSERT INTO `mmp-db`.products (vendor_id, sku, name, price)
+SELECT * FROM (SELECT {vendor_id}, 'SKU-0001', 'Test Product', 19.99) AS tmp
+where NOT EXISTS(
+    SELECT 1 FROM `mmp-db.products` WHERE sku = 'SKU-0001' and vendor_id = {vendor_id}
+) LIMIT 1;
+
+-- Add new Columns to table -- 
+ALTER TABLE `mmp-db`.products
+ADD COLUMN column_name val
+
+-- update values in Table -- 
+UPDATE `mmp-db`.products
+SET column_name = val
+WHERE vendor_id = val AND sku = val;
+

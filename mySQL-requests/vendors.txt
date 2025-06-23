@@ -1,0 +1,26 @@
+CurrentTable:
+-id
+-vendor_name
+-vendor_address_1
+-vendor_address_2
+-vendor_city
+-vendor_state
+-vendor_zip
+-vendor_ein
+-vendor_website
+
+--- Search Table---
+SELECT * From `mmp-db`.vendors (opt.) WHERE id = val AND vendor_name = val;
+
+--- Add New Vendor ---
+INSERT INTO `mmp-db`.vendor (vendor_name, vendor_address_1, vendor_address_2, vendor_city, vendor_state, vendor_zip, vendor_ein, vendor_website)
+VALUES ({vendor_name}, {vendor_address_1}, {vendor_address_2}, {vendor_city}, {vendor_state}, {vendor_zip}, {vendor_ein}, {vendor_website})
+
+-- Add new Columns to tabl -- 
+ALTER TABLE `mmp-db'.vendors
+ADD COLUMN column_name val
+
+-- update values in Table -- 
+UPDATE `mmp-db`.vendors
+SET column_name = val
+WHERE id = val;
