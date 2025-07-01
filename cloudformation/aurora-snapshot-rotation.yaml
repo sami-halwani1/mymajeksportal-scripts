@@ -1,0 +1,130 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Auto-delete Aurora cluster from Snapshot via scheduled Lambda Function
+
+Parameters:
+  VPCSecurityGroup:
+    Type: String
+    Description: Security Group for the Lambda function to access the Aurora cluster
+  DBSubnetGroup:
+    Type: String
+    Description: Subnet Group for the Aurora cluster
+  SnapshotIdentifier:
+    Type: String
+    Description: Snapshot name or ARN
+  DBClusterIdentifier:
+    Type: String
+    Description: Aurora Cluster Identifier
+
+Resources:
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: AuroraAutomationLambdaRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AuroraAutomationPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - rds:DeleteDBCluster
+                  - rds:RestoreDBClusterFromSnapshot
+                  - rds:DescribeDBClusters
+                  - rds:DescribeDBClusterSnapshots
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+  RestoreLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: RestoreAuroraCluster
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+          def lambda_handler(event, context):
+              rds = boto3.client('rds')
+              response = rds.restore_db_cluster_from_snapshot(
+                  DBClusterIdentifier=os.environ['CLUSTER_ID'],
+                  SnapshotIdentifier=os.environ['SNAPSHOT_ID'],
+                  Engine='aurora-mysql',
+                  VpcSecurityGroupIds=[os.environ['VPC_SG']],
+                  DBSubnetGroupName=os.environ['SUBNET_GROUP']
+              )
+              return response
+      Environment:
+        Variables:
+          CLUSTER_ID: !Ref DBClusterIdentifier
+          SNAPSHOT_ID: !Ref SnapshotIdentifier
+          VPC_SG: !Ref VPCSecurityGroup
+          SUBNET_GROUP: !Ref DBSubnetGroup
+
+  DeleteLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: DeleteAuroraCluster
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+          def lambda_handler(event, context):
+            rds = boto3.client('rds')
+            response = rds.delete_db_cluster(
+                DBClusterIdentifier=os.environ['CLUSTER_ID'],
+                SkipFinalSnapshot=True,
+                DeleteAutomatedBackups=True
+            )
+            return response
+      Environment:
+        Variables:
+          CLUSTER_ID: !Ref DBClusterIdentifier
+
+  RestoreSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: RestoreClusterSchedule
+      ScheduleExpression: 'cron(0 18 * * ? *)' # Every day at 18:00 PM UTC / 11 AM PDT 
+      Targets:
+        - Arn: !GetAtt RestoreLambda.Arn
+          Id: RestoreLambdaTarget
+  
+  DeleteSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: DeleteClusterSchedule
+      ScheduleExpression: 'cron(0 6 * * ? *)' # Every day at 6:00 AM UTC / 11:00 PM PDT
+      Targets:
+        - Arn: !GetAtt DeleteLambda.Arn
+          Id: DeleteLambdaTarget
+  
+  PermissionForEventToInvokeRestore:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref RestoreLambda
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt RestoreSchedule.Arn
+
+  PermissionForEventToInvokeDelete:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DeleteLambda
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt DeleteSchedule.Arn
