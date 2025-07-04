@@ -1,0 +1,45 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EC2 Hello World with Nginx
+
+Parameters:
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Name of an existing EC2 KeyPair to SSH into the instance
+
+Resources:
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP and SSH
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      SecurityGroups: 
+        - !Ref EC2SecurityGroup
+      ImageId: ami-05ffe3c48a9991133 # Amazon Linux 2023 AMI 2023.7.20250623.1 x86_64 HVM kernel-6.1
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          dnf update -y
+          dnf install -y nginx
+          systemctl start nginx
+          systemctl enable nginx
+          sleep 5
+          echo "<h1>Hello, World from EC2</h1>" > /usr/share/nginx/html/index.html
+
+Outputs:
+  PublicIP:
+    Description: Public IP of the EC2 Instance
+    Value: !GetAtt EC2Instance.PublicIp

@@ -1,0 +1,59 @@
+﻿AWSTemplateFormatVersion: '2010-09-09'
+Description: Create State Website on S3 Using CloudFormation
+# Function:
+# - S3 bucket (with versioning)
+# - Public read policy
+# - Website configuration block
+#  -Outputs: WebsiteURLs
+
+Parameters:
+  BucketName:
+    Type: String
+    Description: Name of the S3 Bucket to be used for the Static Website ([a-z0-9.-] characters, must be unique across all AWS accounts in the region)
+
+Resources:
+  #Create Bucket Bucket Called StaticWebsiteBucket
+  StaticWebsiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref BucketName
+      VersioningConfiguration:
+        Status: Enabled
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        IgnorePublicAcls: false
+        BlockPublicPolicy: false
+        RestrictPublicBuckets: false
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: Name
+          Value: !Ref BucketName
+
+  #Create Bucket Policy to allow Public Read Access
+  StaticWebsiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref StaticWebsiteBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: "*"
+            Action: "s3:GetObject"
+            Resource: !Sub "arn:aws:s3:::${StaticWebsiteBucket}/*"
+
+#Output WebsiteURL
+Outputs:
+  WebsiteURL:
+    Description: URL of the static website
+    Value: !GetAtt StaticWebsiteBucket.WebsiteURL
